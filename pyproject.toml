@@ -1,7 +1,7 @@
 [project]
-name = "whippet"
+name = "borzoi"
 version = "0.1.0"
-description = "Add your description here"
+description = "Start and stop runs."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
