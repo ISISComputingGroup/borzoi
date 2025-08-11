@@ -1,6 +1,8 @@
 import os
 import uuid
 import logging
+import asyncio
+
 
 from aioca import run, camonitor, caget
 from epicscorelibs.ca.dbr import DBR_CHAR_BYTES
@@ -15,15 +17,20 @@ logging.basicConfig(level=logging.INFO)
 
 class RunStarter:
 
-    # This class needs to
-    # have a function which handles
-    def __init__(self, prefix, ):
+    def __init__(self, prefix, loop):
         self.producer = None
         self.prefix = prefix
         self.blocks = []
         self.current_job_id = ""
-        camonitor(f"{self.prefix}CS:BLOCKSERVER:BLOCKNAMES", callback=self.update_blocks, datatype=DBR_CHAR_BYTES)
-        pass
+
+        loop.create_task(self.set_up_monitors())
+        loop.run_forever()
+
+    async def set_up_monitors(self):
+        camonitor(f"{self.prefix}CS:BLOCKSERVER:BLOCKNAMES", callback=self.update_blocks,
+                  datatype=DBR_CHAR_BYTES)
+        camonitor(f"{self.prefix}DAE:RUNSTATE", callback=self.react_to_runstate_change,
+                  all_updates=True, datatype=str)
 
     async def update_blocks(self, value):
         logger.info(f"blocks_hexed: {value}")
@@ -44,25 +51,17 @@ class RunStarter:
         logger.info(f"Sending run stop with job_id: {job_id}")
         # TODO get run stop time here
         # serialise_6s4t(self.current_job_id)
-        pass
 
     async def construct_and_send_runstart(self, job_id: str, prefix):
         logger.info(f"Sending run start with job_id: {job_id}")
-        start_time = await caget(f"{prefix}DAE:STARTTIME")
         # TODO get start time as unix timestamp here
         # TODO construct nexus json here
-
-
-async def set_up_monitor(prefix, runstarter):
-    logger.info("setting up monitor with prefix %s", prefix)
-    camonitor(f"{prefix}DAE:RUNSTATE", callback=runstarter.react_to_runstate_change, all_updates=True, datatype=str)
+        # serialise_pl72()
 
 def main():
     prefix = os.environ.get("MYPVPREFIX")
-    # TODO do i need to set up an event loop here and pass it into the RunStarter instance as well as using it below?
-    runstarter = RunStarter(prefix)
-
-    run(set_up_monitor(prefix, runstarter), forever=True)
+    loop = asyncio.new_event_loop()
+    RunStarter(prefix, loop)
 
 
 if __name__ == "__main__":
