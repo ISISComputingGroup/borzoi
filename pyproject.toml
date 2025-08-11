@@ -1,0 +1,14 @@
+[project]
+name = "whippet"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pyepics",
+    "ess-streaming-data-types",
+#    "ibex_non_ca_helpers"
+]
+
+[project.optional-dependencies]
+dev = ["ruff"]
