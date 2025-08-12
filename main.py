@@ -26,15 +26,22 @@ class RunStarter:
         self.topic = topic
 
     async def set_up_monitors(self):
-        camonitor(f"{self.prefix}CS:BLOCKSERVER:BLOCKNAMES", callback=self._update_blocks,
-                  datatype=DBR_CHAR_BYTES)
-        camonitor(f"{self.prefix}DAE:RUNSTATE", callback=self._react_to_runstate_change,
-                  all_updates=True, datatype=str)
+        camonitor(
+            f"{self.prefix}CS:BLOCKSERVER:BLOCKNAMES",
+            callback=self._update_blocks,
+            datatype=DBR_CHAR_BYTES,
+        )
+        camonitor(
+            f"{self.prefix}DAE:RUNSTATE",
+            callback=self._react_to_runstate_change,
+            all_updates=True,
+            datatype=str,
+        )
 
-    async def _update_blocks(self, value):
-        logger.info(f"blocks_hexed: {value}")
+    def _update_blocks(self, value):
+        logger.debug(f"blocks_hexed: {value}")
         blocks_unhexed = dehex_decompress_and_dejson(bytes(value))
-        logger.info(f"blocks_unhexed: {blocks_unhexed}")
+        logger.debug(f"blocks_unhexed: {blocks_unhexed}")
         self.blocks = [f"{self.prefix}CS:SB:{x}" for x in blocks_unhexed]
 
     async def _react_to_runstate_change(self, value):
@@ -57,12 +64,16 @@ class RunStarter:
         # TODO get start time as unix timestamp here
         # TODO construct nexus json here
         # serialise_pl72()
-        await self.producer.send(self.topic, f"run start with job_id: {job_id}".encode())
+        await self.producer.send(
+            self.topic, f"run start with job_id: {job_id}".encode()
+        )
+
 
 async def set_up_producer(broker: str):
     producer = AIOKafkaProducer(bootstrap_servers=broker)
     await producer.start()
     return producer
+
 
 def main():
     prefix = os.environ.get("MYPVPREFIX")
