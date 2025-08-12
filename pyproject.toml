@@ -5,7 +5,8 @@ description = "Start and stop runs."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "pyepics",
+    "aioca",
+    "aiokafka",
     "ess-streaming-data-types",
 #    "ibex_non_ca_helpers"
 ]
