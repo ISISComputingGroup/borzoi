@@ -2,7 +2,7 @@ import os
 import uuid
 import logging
 import asyncio
-
+import json
 
 from aioca import caget, camonitor
 from aiokafka import AIOKafkaProducer
@@ -14,6 +14,9 @@ from streaming_data_types.run_stop_6s4t import serialise_6s4t
 
 logger = logging.getLogger("borzoi")
 logging.basicConfig(level=logging.INFO)
+
+# TODO pass this in at start
+INSTNAME = "NDW2932"
 
 
 class RunStarter:
@@ -61,15 +64,64 @@ class RunStarter:
 
         runnum = await caget(f"{self.prefix}DAE:RUNNUMBER")
 
-        # TODO construct filename here - wants to be hostname minus NDX prefix(?) + rbnum .nxs
-        filename = f"TEST_{runnum}.nxs"
+        nexus_structure = {
+            "children": [
+                {
+                    "type": "group",
+                    "name": "raw_data_1",
+                    "children": [
+                        {
+                            "type": "group",
+                            "name": "events",
+                            "children": [
+                                # {
+                                #     "type": "stream",
+                                #     "stream": {
+                                #         "topic": f"{INSTNAME}_events",
+                                #         "source": "ISISICP",
+                                #         "writer_module": "ev42",
+                                #     },
+                                # },
+                            ],
+                            "attributes": [
+                                {
+                                    "name": "NX_class",
+                                    "values": "NXentry"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "group",
+                            "name": "selog",
+                            "children": [
+                                {
+                                    "type": "stream",
+                                    "stream": {
+                                        "topic": f"{INSTNAME}_sampleEnv",
+                                        "source": x,
+                                        "writer_module": "f144",
+                                    },
+                                }
+                                for x in self.blocks
+                            ],
+                        },
+                    ],
+                    "attributes": [
+                        {
+                            "name": "NX_class",
+                            "values": "NXentry"
+                        }
+                    ]
+                }
+            ]
+        }
+        filename = f"{INSTNAME}{runnum}.nxs"
 
         blob = serialise_pl72(
             job_id,
             filename=filename,
             start_time=start_time_ms,
-            nexus_structure="{}",
-            instrument_name="TEST",
+            nexus_structure=json.dumps(nexus_structure),
         )
         await self.producer.send(self.topic, blob)
 
@@ -83,7 +135,7 @@ class RunStarter:
         stop_time_s = await caget(f"{self.prefix}DAE:STOP_TIME")
         stop_time_ms = int(stop_time_s * 1000)
         logger.info(f"stop time: {stop_time_ms}")
-        blob = serialise_6s4t(job_id, stop_time=stop_time_ms)
+        blob = serialise_6s4t(job_id, stop_time=stop_time_ms, command_id=self.current_job_id)
         await self.producer.send(self.topic, blob)
 
 
@@ -97,7 +149,7 @@ def main():
     prefix = os.environ.get("MYPVPREFIX")
 
     broker = "livedata.isis.cclrc.ac.uk:31092"
-    topic = "jacktestconfig"
+    topic = f"{INSTNAME}_runInfo"
 
     loop = asyncio.new_event_loop()
     producer = loop.run_until_complete(set_up_producer(broker))
