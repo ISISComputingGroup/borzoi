@@ -153,8 +153,8 @@ def main():
             "prefix or instrument name not set - have you run config_env.bat?"
         )
 
-    broker = "livedata.isis.cclrc.ac.uk:31092"
-    topic = f"{instrument_name}_runInfo"
+    broker = os.environ.get("BORZOI_KAFKA_BROKER", "livedata.isis.cclrc.ac.uk:31092")
+    topic = os.environ.get("BORZOI_TOPIC", f"{instrument_name}_runInfo")
     logger.info("setting up producer")
     loop = asyncio.new_event_loop()
     producer = loop.run_until_complete(set_up_producer(broker))
