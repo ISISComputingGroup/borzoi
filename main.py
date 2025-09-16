@@ -15,20 +15,21 @@ from streaming_data_types.run_stop_6s4t import serialise_6s4t
 logger = logging.getLogger("borzoi")
 logging.basicConfig(level=logging.INFO)
 
-# TODO pass this in at start
-INSTNAME = "NDW2932"
-
 
 class RunStarter:
-    def __init__(self, prefix, producer, topic):
+    def __init__(
+        self, prefix: str, instrument_name: str, producer: AIOKafkaProducer, topic: str
+    ):
         self.producer = None
         self.prefix = prefix
         self.blocks = []
         self.current_job_id = ""
         self.producer = producer
+        self.instrument_name = instrument_name
         self.topic = topic
 
     async def set_up_monitors(self):
+        logger.info("Setting up monitors")
         camonitor(
             f"{self.prefix}CS:BLOCKSERVER:BLOCKNAMES",
             callback=self._update_blocks,
@@ -74,21 +75,16 @@ class RunStarter:
                             "type": "group",
                             "name": "events",
                             "children": [
-                                # {
-                                #     "type": "stream",
-                                #     "stream": {
-                                #         "topic": f"{INSTNAME}_events",
-                                #         "source": "ISISICP",
-                                #         "writer_module": "ev42",
-                                #     },
-                                # },
-                            ],
-                            "attributes": [
                                 {
-                                    "name": "NX_class",
-                                    "values": "NXentry"
-                                }
-                            ]
+                                    "type": "stream",
+                                    "stream": {
+                                        "topic": f"{self.instrument_name}_events",
+                                        "source": "ISISICP",
+                                        "writer_module": "ev42",
+                                    },
+                                },
+                            ],
+                            "attributes": [{"name": "NX_class", "values": "NXentry"}],
                         },
                         {
                             "type": "group",
@@ -97,7 +93,7 @@ class RunStarter:
                                 {
                                     "type": "stream",
                                     "stream": {
-                                        "topic": f"{INSTNAME}_sampleEnv",
+                                        "topic": f"{self.instrument_name}_sampleEnv",
                                         "source": x,
                                         "writer_module": "f144",
                                     },
@@ -106,16 +102,11 @@ class RunStarter:
                             ],
                         },
                     ],
-                    "attributes": [
-                        {
-                            "name": "NX_class",
-                            "values": "NXentry"
-                        }
-                    ]
+                    "attributes": [{"name": "NX_class", "values": "NXentry"}],
                 }
             ]
         }
-        filename = f"{INSTNAME}{runnum}.nxs"
+        filename = f"{self.instrument_name}{runnum}.nxs"
 
         blob = serialise_pl72(
             job_id,
@@ -129,17 +120,25 @@ class RunStarter:
         logger.info(f"Sending run stop with job_id: {job_id}")
         # stop_time only gets set to a non-zero value when the runstate goes back to SETUP.
         # This is dirty, but poll it every 0.5 seconds until it does.
-        while await caget(f"{self.prefix}DAE:RUNSTATE", datatype=str) != "SETUP":
+        while (
+            current_runstate := await caget(f"{self.prefix}DAE:RUNSTATE", datatype=str)
+            != "SETUP"
+        ):
+            logger.debug(
+                f"Waiting for run state to go back to SETUP. Currently {current_runstate}"
+            )
             await asyncio.sleep(0.5)
 
         stop_time_s = await caget(f"{self.prefix}DAE:STOP_TIME")
         stop_time_ms = int(stop_time_s * 1000)
         logger.info(f"stop time: {stop_time_ms}")
-        blob = serialise_6s4t(job_id, stop_time=stop_time_ms, command_id=self.current_job_id)
+        blob = serialise_6s4t(
+            job_id, stop_time=stop_time_ms, command_id=self.current_job_id
+        )
         await self.producer.send(self.topic, blob)
 
 
-async def set_up_producer(broker: str):
+async def set_up_producer(broker: str) -> AIOKafkaProducer:
     producer = AIOKafkaProducer(bootstrap_servers=broker)
     await producer.start()
     return producer
@@ -147,14 +146,22 @@ async def set_up_producer(broker: str):
 
 def main():
     prefix = os.environ.get("MYPVPREFIX")
+    instrument_name = os.environ.get("INSTRUMENT")
+
+    if prefix is None or instrument_name is None:
+        raise ValueError(
+            "prefix or instrument name not set - have you run config_env.bat?"
+        )
 
     broker = "livedata.isis.cclrc.ac.uk:31092"
-    topic = f"{INSTNAME}_runInfo"
-
+    topic = f"{instrument_name}_runInfo"
+    logger.info("setting up producer")
     loop = asyncio.new_event_loop()
     producer = loop.run_until_complete(set_up_producer(broker))
+    logger.info("set up producer")
 
-    run_starter = RunStarter(prefix, producer, topic)
+    logger.info("starting run starter")
+    run_starter = RunStarter(prefix, instrument_name, producer, topic)
     loop.create_task(run_starter.set_up_monitors())
     loop.run_forever()
 

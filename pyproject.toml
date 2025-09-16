@@ -8,7 +8,7 @@ dependencies = [
     "aioca",
     "aiokafka",
     "ess-streaming-data-types",
-#    "ibex_non_ca_helpers"
+    "ibex_non_ca_helpers"
 ]
 
 [project.optional-dependencies]
