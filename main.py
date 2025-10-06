@@ -26,6 +26,8 @@ class RunStarter:
         self.producer = producer
         self.instrument_name = instrument_name
         self.topic = topic
+        self.current_run_number = None
+        self.current_start_time_ms = None
 
     async def set_up_monitors(self) -> None:
         logger.info("Setting up monitors")
@@ -40,6 +42,30 @@ class RunStarter:
             all_updates=True,
             datatype=str,
         )
+        camonitor(
+            f"{self.prefix}DAE:RUNNUMBER",
+            callback=self._update_run_number,
+            all_updates=True,
+            datatype=int,
+        )
+        camonitor(
+            f"{self.prefix}DAE:START_TIME",
+            callback=self._update_start_time_ms,
+            all_updates=True,
+            datatype=int,
+        )
+
+    def _update_run_number(self, value: int) -> None:
+        # Cache this as we want the run start message construction and production to be as fast as
+        # possible so we don't miss events
+        logger.debug(f"Run number updated to {value}")
+        self.current_run_number = value
+
+    def _update_start_time_ms(self, value: int) -> None:
+        # Cache this as we want the run start message construction and production to be as fast as
+        # possible so we don't miss events
+        logger.debug(f"Run start time updated to {value} so changing it to ms ({value * 1000})")
+        self.current_start_time_ms = value * 1000
 
     def _update_blocks(self, value: ca_bytes) -> None:
         logger.debug(f"blocks_hexed: {value}")
@@ -58,11 +84,10 @@ class RunStarter:
 
     async def construct_and_send_runstart(self, job_id: str) -> None:
         logger.info(f"Sending run start with job_id: {job_id}")
-        start_time_s = await caget(f"{self.prefix}DAE:START_TIME")
-        start_time_ms = int(start_time_s * 1000)
+        start_time_ms = self.current_start_time_ms
         logger.info(f"Start time: {start_time_ms}")
 
-        runnum = await caget(f"{self.prefix}DAE:RUNNUMBER")
+        runnum = self.current_run_number
 
         nexus_structure = {
             "children": [
@@ -112,6 +137,7 @@ class RunStarter:
             filename=filename,
             start_time=start_time_ms,
             nexus_structure=json.dumps(nexus_structure),
+            run_name=runnum,
         )
         await self.producer.send(self.topic, blob)
 
@@ -126,6 +152,9 @@ class RunStarter:
             await asyncio.sleep(0.5)
 
         stop_time_s = await caget(f"{self.prefix}DAE:STOP_TIME")
+        if stop_time_s is None:
+            logger.error(f"Failed to get stop time from {job_id}")
+            return
         stop_time_ms = int(stop_time_s * 1000)
         logger.info(f"stop time: {stop_time_ms}")
         blob = serialise_6s4t(job_id, stop_time=stop_time_ms, command_id=self.current_job_id)
