@@ -63,12 +63,6 @@ class RunStarter:
         logger.info(f"Run number updated to {value}")
         self.current_run_number = value
 
-    def _update_start_time_ms(self, value: int) -> None:
-        # Cache this as we want the run start message construction and production to be as fast as
-        # possible so we don't miss events
-        logger.info(f"Run start time updated to {value} so changing it to ms ({value * 1000})")
-        self.current_start_time_ms = int(value) * 1000
-
     def _update_blocks(self, value: ca_bytes) -> None:
         logger.debug(f"blocks_hexed: {value}")
         blocks_unhexed = dehex_decompress_and_dejson(bytes(value))
