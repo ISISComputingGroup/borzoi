@@ -69,7 +69,7 @@ class RunStarter:
         logger.debug(f"blocks_unhexed: {blocks_unhexed}")
         self.blocks = [f"{self.prefix}CS:SB:{x}" for x in blocks_unhexed]
 
-    async def construct_and_send_runstart(self, value: float) -> None:
+    async def construct_and_send_runstart(self, value: float | None) -> None:
         if self.current_start_time is None:
             logger.info("Initial update for start time - not sending run start")
             self.current_start_time = value
