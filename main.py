@@ -51,7 +51,7 @@ class RunStarter:
             datatype=float,
         )
         camonitor(
-            f"{self.prefix}DAE:STOP_TIME",
+            f"{self.prefix}DAE:END_TIME",
             self.construct_and_send_runstop,
             all_updates=True,
             datatype=float,
